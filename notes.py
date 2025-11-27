@@ -136,7 +136,7 @@ class NoteApp(App):
             
         # Simplenote uses the first line of the 'content' field as the title, 
         # but we prepend the extracted title and ensure the body follows.
-        final_simplenote_content = f"{title}\n{note_body}"
+        final_simplenote_content = f"{title}\n\n{note_body}"
 
 
         note_data = {
