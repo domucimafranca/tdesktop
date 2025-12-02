@@ -15,10 +15,8 @@ https://eng.uber.com/feed/
 https://aws.amazon.com/blogs/aws/feed/
 https://azure.microsoft.com/en-us/blog/feed/
 https://news.ycombinator.com/rss
-https://thehackernews.com/rss.xml
 https://kubernetes.io/feed.xml
 https://research.ibm.com/rss
-https://quantumzeitgeist.com/feed/
 https://www.quantamagazine.org/feed/
 https://physicsworld.com/feed/
 https://www.universetoday.com/feed/
