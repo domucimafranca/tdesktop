@@ -1,5 +1,6 @@
 import time
 import re
+import webbrowser
 from datetime import datetime
 import feedparser
 from bs4 import BeautifulSoup
@@ -16,6 +17,7 @@ class RSSReaderApp(App):
     - Auto-advance (10s)
     - Auto-refresh feeds (1hr)
     - Clean text (First paragraph only, flattened)
+    - Open Links ('o')
     """
 
     CSS = """
@@ -59,6 +61,7 @@ class RSSReaderApp(App):
         Binding("space", "next_story", "Next"),
         Binding("left", "prev_story", "Previous"),
         Binding("r", "refresh_feeds", "Force Refresh"),
+        Binding("o", "open_link", "Open in Browser"),
     ]
 
     # State
@@ -81,13 +84,8 @@ class RSSReaderApp(App):
 
     def on_mount(self) -> None:
         """Start the app, load feeds, and set timers."""
-        # 1. Initial Load
         self.refresh_feeds()
-        
-        # 2. Set Auto-Advance Timer (Cycles story every 10 seconds)
         self.auto_timer = self.set_interval(10.0, self.action_next_story)
-
-        # 3. Set Feed Refresh Timer (Reloads RSS every 1 hour / 3600 seconds)
         self.set_interval(3600.0, self.refresh_feeds)
 
     def refresh_feeds(self):
@@ -107,16 +105,11 @@ class RSSReaderApp(App):
         all_entries = []
         for url in urls:
             try:
-                # Use feedparser (blocking I/O)
                 parsed = feedparser.parse(url)
                 for entry in parsed.entries:
-                    # Get raw content (summary or content)
                     raw_content = entry.get('content', [{'value': entry.get('summary', '')}])[0]['value']
-                    
-                    # Apply the strict "First Paragraph + Flatten" cleaning
                     clean_text = self.clean_html(raw_content)
                     
-                    # Handle Date
                     pub_date = entry.get('published_parsed') or entry.get('updated_parsed')
                     if pub_date:
                         dt_object = datetime.fromtimestamp(time.mktime(pub_date))
@@ -127,48 +120,38 @@ class RSSReaderApp(App):
                         'title': entry.get('title', 'No Title'),
                         'date': dt_object,
                         'source': parsed.feed.get('title', url),
-                        'body': clean_text
+                        'body': clean_text,
+                        'link': entry.get('link', '') 
                     })
             except Exception:
-                continue # Skip broken feeds
+                continue 
 
-        # Sort and Store
         if all_entries:
             self.stories = sorted(all_entries, key=lambda x: x['date'], reverse=True)
-            # Reset index to 0 so we don't crash if the list length changed
             self.current_index = 0
             self.call_from_thread(self.update_display)
         else:
             self.call_from_thread(self.query_one("#title", Static).update, "No stories found.")
 
     def clean_html(self, html_content):
-        """
-        1. Extract FIRST paragraph (<p>) only.
-        2. Remove all hard returns/formatting within that paragraph.
-        """
         if not html_content:
             return "No content available."
 
         soup = BeautifulSoup(html_content, "lxml")
         
-        # 1. Grab first <p> or fallback to all text
         first_p = soup.find('p')
         if first_p:
             raw_text = first_p.get_text()
         else:
             raw_text = soup.get_text()
 
-        # 2. Flatten: Replace newlines/tabs/spaces with single space
         flat_text = re.sub(r'\s+', ' ', raw_text).strip()
-        
         return flat_text
 
     def update_display(self):
-        """Updates widgets based on current_index."""
         if not self.stories:
             return
 
-        # Safety check for index bounds
         if self.current_index >= len(self.stories):
             self.current_index = 0
 
@@ -182,7 +165,6 @@ class RSSReaderApp(App):
         self.query_one(VerticalScroll).scroll_home(animate=False)
 
     def action_next_story(self):
-        """Next story + reset idle timer."""
         if self.stories:
             self.current_index = (self.current_index + 1) % len(self.stories)
             self.update_display()
@@ -190,12 +172,21 @@ class RSSReaderApp(App):
                 self.auto_timer.reset()
 
     def action_prev_story(self):
-        """Prev story + reset idle timer."""
         if self.stories:
             self.current_index = (self.current_index - 1) % len(self.stories)
             self.update_display()
             if self.auto_timer:
                 self.auto_timer.reset()
+
+    def action_open_link(self):
+        """Opens current story link in default browser."""
+        if not self.stories: return
+        link = self.stories[self.current_index].get('link')
+        if link:
+            webbrowser.open(link)
+            self.notify(f"Opening: {link}")
+        else:
+            self.notify("No link available for this story.", severity="warning")
 
 if __name__ == "__main__":
     app = RSSReaderApp()
